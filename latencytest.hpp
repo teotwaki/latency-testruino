@@ -1,6 +1,8 @@
 #ifndef LATENCY_TESTRUINO_LATENCYTEST_HPP
 #define LATENCY_TESTRUINO_LATENCYTEST_HPP
 
+#include "config.hpp"
+
 // Demodulated (I, Q) amplitudes.
 volatile int16_t signal_I, signal_Q;
 
@@ -12,19 +14,9 @@ class LatencyTest {
   bool _running = false;
   TestResult* _test_result = nullptr;
 
-  // Tone generation
-  int32_t _tone_frequency = 1000;
-  int32_t _tone_duration = 50;
-
-  // Tone detection
-  int32_t _tone_duration_threshold = 30;
-  int32_t _receive_timeout = 3000;
-  int32_t _loop_duration = 100;
-  int8_t _tone_power_threshold = 30;
-
-  int32_t _tone_sent = 0;
-  int32_t _tone_start = 0;
-  int32_t _last_detection = 0;
+  uint32_t _tone_sent = 0;
+  uint32_t _tone_start = 0;
+  uint32_t _last_detection = 0;
 
   Jack _jack = Jack::A;
 
@@ -46,9 +38,9 @@ class LatencyTest {
       pin = PIN_JACK_B_OUT;
     }
     led_on(Jack::A, Direction::TX);
-    tone(pin, _tone_frequency, _tone_duration);
+    tone(pin, TONE_FREQUENCY, TONE_DURATION);
     _tone_sent = millis();
-    delay(_tone_duration);
+    delay(TONE_DURATION);
     led_off();
     _test_result->increment_sent();
   }
@@ -61,54 +53,65 @@ class LatencyTest {
   }
   
   inline void startstop() {
-    _running = !_running;
+    if (_running) {
+      _running = false;
+      _last_detection = millis() + 1000; // clear the receiving line
+      _tone_start = 0;
+      _tone_sent = 0;
+      led_off();
+    } else {
+      _running = true;
+    }
   }
 
   inline void run() {
-    // if we had a detection before, let's make sure the line is clear before listening again.
-    if (_last_detection != 0) {
-      if ((millis() - _last_detection) > _tone_duration) {
-        _last_detection = 0;
-      } else {
-        return;
+    if (_running) {
+      // if we had a detection before, let's make sure the line is clear before listening again.
+      if (_last_detection != 0) {
+        if ((millis() - _last_detection) > TONE_DURATION) {
+          _last_detection = 0;
+        } else {
+          return;
+        }
       }
-    }
-    
-    if (_tone_sent != 0) { // we're waiting for a tone to arrive
-      if ((millis() - _tone_sent) > _receive_timeout) { // tone is lost
-        _tone_sent = 0;
-        return;
-      }
-
-      else { // tone is on its way, let's have a listen
-        int32_t loop_start = millis();
-        // block the main thread for 100ms while we listen continuously (increased accuracy)
-        while ((millis() - loop_start) < _loop_duration) {
-          if (get_power_reading() > _tone_power_threshold) { // a tone is currently being heard
-            led_on(Jack::B, Direction::RX);
-            if (_tone_start == 0) { // first time we're hearing it
-              _tone_start = millis();
+      
+      if (_tone_sent != 0) { // we're waiting for a tone to arrive
+        if ((millis() - _tone_sent) > TONE_RECEIVE_TIMEOUT) { // tone is lost
+          _tone_sent = 0;
+          return;
+        }
+  
+        else { // tone is on its way, let's have a listen
+          int32_t loop_start = millis();
+          // block the main thread for 100ms while we listen continuously (increased accuracy)
+          while ((millis() - loop_start) < LOOP_DURATION) {
+            if (get_power_reading() > TONE_DURATION_THRESHOLD) { // a tone is currently being heard
+              led_on(Jack::B, Direction::RX);
+              if (_tone_start == 0) { // first time we're hearing it
+                _tone_start = millis();
+              }
+              else if ((millis() - _tone_start) > TONE_DURATION_THRESHOLD) { // we've been hearing it for 30ms
+                // log it
+                _test_result->add(_tone_start - _tone_sent);
+                _last_detection = millis();
+                _tone_start = 0;
+                _tone_sent = 0;
+                led_off();
+                break;
+              }
             }
-            else if ((millis() - _tone_start) > _tone_duration_threshold) { // we've been hearing it for 30ms
-              // log it
-              _test_result->add(_tone_start - _tone_sent);
-              _last_detection = millis();
-              _tone_start = 0;
-              _tone_sent = 0;
+            else {
               led_off();
-            }
-          }
-          else {
-            led_off();
-            if (_tone_start != 0) { // we're not hearing anything, but we started hearing a tone previously. Cancel it out.
-              _tone_start = 0;
+              if (_tone_start != 0) { // we're not hearing anything, but we started hearing a tone previously. Cancel it out.
+                _tone_start = 0;
+              }
             }
           }
         }
       }
-    }
-    else {
-      play_tone();
+      else {
+        play_tone();
+      }
     }
   }
 };

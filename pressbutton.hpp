@@ -4,8 +4,8 @@
 class PressButton {
   private:
   int8_t _pin;
-  unsigned long _last_press = 0;
-  unsigned long _debounce_delay;
+  uint32_t _last_press = 0;
+  uint16_t _debounce_delay;
 
   bool debouncing() {
     return ((millis() - _last_press) < _debounce_delay);

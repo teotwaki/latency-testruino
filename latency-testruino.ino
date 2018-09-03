@@ -12,13 +12,14 @@ TestResult test_result;
 Display display(&test_result);
 LatencyTest latency_test(&test_result);
 PressButton start_stop_button(PIN_BUTTON_SS), reset_button(PIN_BUTTON_RS);
+LiquidCrystal lcd(PIN_LCD_RS, PIN_LCD_EN, PIN_LCD_D4, PIN_LCD_D5, PIN_LCD_D6, PIN_LCD_D7);
 
 void banner() {
   lcd.clear();
   lcd.setCursor(3, 0);
-  lcd.print("Back to the");
+  lcd.print(F("Back to the"));
   lcd.setCursor(5, 1);
-  lcd.print("Future");
+  lcd.print(F("Future"));
     
   led_on(Jack::A, Direction::TX);
   delay(250);
@@ -31,9 +32,9 @@ void banner() {
 
   lcd.clear();
   lcd.setCursor(6, 0);
-  lcd.print("with");
+  lcd.print(F("with"));
   lcd.setCursor(6, 1);
-  lcd.print("Dixa");
+  lcd.print(F("Dixa"));
 
     
   led_on(Jack::A, Direction::TX);

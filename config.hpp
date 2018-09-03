@@ -6,9 +6,10 @@
 #define TONE_DURATION  50 // ms
 
 // Test stuff
-#define MAX_TEST_DURATION    3000 // ms
+#define TONE_RECEIVE_TIMEOUT 3000 // ms
 #define TONE_POWER_THRESHOLD 50 // some loudness unit?
-#define TONE_DURATION_THRESHOLD 30 // ms
+#define TONE_DURATION_THRESHOLD 25 // ms
+#define LOOP_DURATION 150 // ms
 #define TEST_COUNT 5 // iterations
 
 #define    SAMPLING_FREQ (F_CPU / (128 * 13.0)) // 9.615 kHz

@@ -1,19 +1,27 @@
 #ifndef LATENCY_TESTRUINO_DISPLAY_HPP
 #define LATENCY_TESTRUINO_DISPLAY_HPP
 
-LiquidCrystal lcd(PIN_LCD_RS, PIN_LCD_EN, PIN_LCD_D4, PIN_LCD_D5, PIN_LCD_D6, PIN_LCD_D7);
+extern LiquidCrystal lcd;
+
+#define ARRAY_SIZE 512
 
 class TestResult {
   private:
-  int32_t _total_duration;
+  uint16_t _measurements[ARRAY_SIZE];
+  uint16_t _index = 0;
   
   public:
-  int16_t minimum = 0;
-  int16_t maximum = 0;
-  int16_t average = 0;
-  int16_t stddev = 0;
-  int16_t sent = 0;
-  int16_t received = 0;
+  inline TestResult() {
+    reset();
+  }
+  
+  uint16_t minimum = 0;
+  uint16_t maximum = 0;
+  uint16_t average = 0;
+  uint16_t stddev = 0;
+  uint16_t sent = 0;
+  uint16_t received = 0;
+  int8_t loss = 0;
 
   inline void reset() {
     minimum = 0;
@@ -22,22 +30,45 @@ class TestResult {
     stddev = 0;
     sent = 0;
     received = 0;
-    _total_duration = 0;
+    loss = 0;
+    
+    memset(_measurements, 0, ARRAY_SIZE * sizeof(uint16_t));
+    _index = 0;
   }
 
-  inline void add(uint32_t measurement) {
-    ++received;
+  inline void add(uint16_t measurement) {
+    _measurements[_index] = measurement;
+    _index = (_index + 1) % ARRAY_SIZE;
+
+    minimum = 65535;
+    maximum = 0;
+    uint32_t total = 0;
+    uint16_t count = 0;
     
-    if (minimum == 0 || (measurement < minimum)) {
-      minimum = measurement;
+    for (uint16_t i = 0; i < ARRAY_SIZE; ++i) {
+      if (_measurements[i] != 0) {
+        total += _measurements[i];
+        ++count;
+        
+        if (_measurements[i] < minimum) {
+          minimum = _measurements[i];
+        }
+  
+        if (_measurements[i] > maximum) {
+          maximum = _measurements[i];
+        }
+      }
     }
 
-    if (measurement > maximum) {
-      maximum = measurement;
+    average = total / count;
+    loss = ((sent - ++received) * 100) / sent;
+
+    uint32_t variance = 0;
+    for (uint16_t i = 0; i < count; ++i) {
+      variance += sq(_measurements[i] - average);
     }
 
-    _total_duration += measurement;
-    average = _total_duration / received;
+    stddev = sqrt(variance / count);
   }
 
   inline void increment_sent() {
@@ -54,16 +85,15 @@ class Display {
   };
 
   Page _page = Page::minmax;
-  long int _last_draw = 0;
-  long int _draw_interval = 100;
-  long int _last_page = 0;
-  long int _page_interval = 2000;
+  uint32_t _last_draw = 0;
+  uint8_t _draw_interval = 100;
+  uint32_t _last_page = 0;
+  uint16_t _page_interval = 2000;
   TestResult* _test_result = nullptr;
 
   inline void draw(bool running) {
     lcd.setCursor(0, 0);
     char buffer[24];
-
 
     if (running) {
       lcd.print("R");
@@ -73,30 +103,24 @@ class Display {
 
     if (_page == Page::minmax) {
       lcd.setCursor(2, 0);
-      lcd.print("  min    max");
-      sprintf(buffer, "   %4d   %4d", _test_result->minimum, _test_result->maximum);
+      lcd.print(F("  min    max"));
+      sprintf(buffer, "   %4u   %4u", _test_result->minimum, _test_result->maximum);
     }
 
     else if (_page == Page::avgstd) {
       lcd.setCursor(2, 0);
-      lcd.print("  avg   stddev");
-      sprintf(buffer, "   %4d   %4d", _test_result->average, _test_result->stddev);
+      lcd.print(F("  avg   stddev"));
+      sprintf(buffer, "   %4u   %4u", _test_result->average, _test_result->stddev);
     }
 
     else {
       lcd.setCursor(2, 0);
-      lcd.print(" count  loss%");
-      sprintf(buffer, "  %02d/%02d  %3d%%", _test_result->received, _test_result->sent, ((_test_result->sent - _test_result->received) * 100) / _test_result->sent);
+      lcd.print(F(" count  loss%"));
+      sprintf(buffer, "  %02u/%02u  %3d%%", _test_result->received, _test_result->sent, _test_result->loss);
     }
 
     lcd.setCursor(0, 1);
     lcd.print(buffer);
-//    if (_state == State::paused) {
-//      lcd.setCursor(0, 0);
-//      lcd.print("P min  max  avg");
-//      lcd.setCursor(0, 1);
-//      lcd.print("  238  472  349");
-//    }
     
     _last_draw = millis();
   }
